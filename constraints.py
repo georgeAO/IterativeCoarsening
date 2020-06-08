@@ -10,6 +10,7 @@ def powerset(iterable):
     i.e. powerset([1,2,3]) --> (1,2) (1,3) (2,3) (1,2,3)
     '''
     s = list(iterable)
+
     return chain.from_iterable(combinations(s, r) for r in range(2, len(s) + 1))
 
 
@@ -44,7 +45,7 @@ def is_it_possible(e, s, e_to_seps):
     return True
 
 
-def generateDecVariables(e_to_seps, l):
+def generate_dec_variables(e_to_seps, l):
     '''
     Obtains the decision variables X_{u,v|S} codified in terms of the edge and the separator, ((u,v),S)
 
@@ -139,6 +140,7 @@ def type2(e_to_seps, dict_of_vars, edge_list, k):
         A2u[count, dict_of_vars[dec_var]] = k - 1
         A2v[count, dict_of_vars[dec_var]] = k - 1
         count += 1
+
     return A2u, b2u, A2v, b2v
 
 
@@ -193,6 +195,7 @@ def type3(sep_to_comps, dict_of_vars):
             A3[row, vals] = 1
         b3[row] = b3ineq[row - hold]
         row += 1
+
     return A3, b3, len(b3eq)
 
 

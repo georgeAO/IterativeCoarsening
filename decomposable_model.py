@@ -1,8 +1,10 @@
 from pgmpy.estimators import BDeuScore
+from pgmpy.models import MarkovModel, BayesianModel
 import networkx as nx
 import numpy as np
 import scipy as scp
 import pandas as pd
+import time as time
 import chordal as ch
 import constraints as co
 import gurobipy as gp
@@ -100,19 +102,21 @@ class DecomposableModel:
                                    self.get_score(to_scoreUVS) - self.get_score(to_scoreS)
         return c
 
-    def learn(self, k_max=np.inf, l_max=np.inf, max_time=500.0, maximal=False):
+    def learn(self, k_max=np.inf, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False):
         self.mst()
         current_model = self.undirected
         sol = [1]
         i = 2
-        while np.linalg.norm(sol, ord=1) > 0.01 and i <= k_max:
-            edge_list = ch.getSortedEdges(current_model)
-            cliques = ch.chainOfCliques(current_model)
-            sep_list = ch.getSeparators(cliques)
-            comps = ch.getCompList(current_model, sep_list)
+        start = time.time()
+        end = 0
+        while np.linalg.norm(sol, ord=1) > 0.01 and i <= k_max and (end - start) < max_time:
+            edge_list = ch.get_sorted_edges(current_model)
+            cliques = ch.chain_of_cliques(current_model)
+            sep_list = ch.get_separators(cliques)
+            comps = ch.get_comp_list(current_model, sep_list)
             sep_to_comps = dict(zip(sep_list, comps))
-            e_to_seps = ch.getSepsForCandEdges(comps, sep_list)
-            list_vars = co.generateDecVariables(e_to_seps, l_max)
+            e_to_seps = ch.get_seps_for_cand_edges(comps, sep_list)
+            list_vars = co.generate_dec_variables(e_to_seps, l_max)
             dict_of_vars = {uvS: ind for ind, uvS in enumerate(list_vars)}
             c = self.get_objective(dict_of_vars)
 
@@ -120,7 +124,7 @@ class DecomposableModel:
             x = m.addMVar(shape=len(c), vtype=GRB.BINARY, name="x")
             m.setObjective(c @ x, GRB.MAXIMIZE)
             m.Params.MIPFocus = 1
-            m.Params.timeLimit = max_time
+            m.Params.timeLimit = max_time_gurobi
 
             A1, b1 = co.type1(e_to_seps, dict_of_vars)
             m.addConstr(A1 @ x <= b1, name="c1")
@@ -140,8 +144,54 @@ class DecomposableModel:
             m.optimize()
             sol = x.X
 
-            new_edges = ch.updateGraph(sol, dict_of_vars)
+            new_edges = ch.update_graph(sol, dict_of_vars)
             e = edge_list + new_edges
             current_model = nx.Graph(e)
+            end = time.time()
 
         self.undirected = current_model
+
+    def to_bn(self, graph):
+        # Generate connected components
+        connected = list(nx.algorithms.components.connected_components(graph))
+        # Hold the edges of each connected component as a list(list())
+        connected_comps = list()
+        # The final bn model
+        final_bn = BayesianModel()
+        # If the graph is not completely connected
+        if len(connected) > 1:
+            for comp in connected:
+                # If the connected component is not a single vertex
+                if len(comp) > 1:
+                    edges_to_add = list()
+                    temp = MarkovModel()
+                    for vert1 in comp:
+                        neighbours = list(graph.neighbors(vert1))
+                        for vert2 in neighbours:
+                            if not ((vert1, vert2) in edges_to_add) and not ((vert2, vert1) in edges_to_add):
+                                edges_to_add.append((vert1, vert2))
+
+                    temp.add_nodes_from(comp)
+                    temp.add_edges_from(edges_to_add)
+                    temp_bn = temp.to_bayesian_model()
+                    connected_comps.append(temp_bn)
+                else:
+                    final_bn.add_nodes_from(comp)
+
+            for bn in connected_comps:
+                final_bn.add_nodes_from(list(bn.nodes))
+                final_bn.add_edges_from(list(bn.edges))
+
+            return final_bn
+
+        else:
+            # If the graph is completely connected, just add all edges to markov model
+            edges = list(graph.edges())
+            vertices = list(graph.nodes)
+            mm = MarkovModel()
+            mm.add_nodes_from(vertices)
+            mm.add_edges_from(edges)
+            bm = mm.to_bayesian_model()
+
+            return bm
+

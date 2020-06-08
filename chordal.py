@@ -37,7 +37,7 @@ def mcs(graph):
     return relabeled, renumbering
 
 
-def chainOfCliques(graph):
+def chain_of_cliques(graph):
     '''
     Parameters
     ----------
@@ -68,7 +68,7 @@ def chainOfCliques(graph):
     return final_list
 
 
-def getSeparators(clique_list, unique=True):
+def get_separators(clique_list, unique=True):
     '''
     Parameters
     ----------
@@ -81,6 +81,7 @@ def getSeparators(clique_list, unique=True):
     '''
     seen = clique_list.pop(0)
     sep_list = []
+
     for clique in clique_list:
         sep = clique.intersection(seen)
         seen = seen.union(clique)
@@ -91,7 +92,7 @@ def getSeparators(clique_list, unique=True):
         return sep_list
 
 
-def getCompList(graph, sep_list):
+def get_comp_list(graph, sep_list):
     '''
     Parameters
     ----------
@@ -114,7 +115,7 @@ def getCompList(graph, sep_list):
     return comp_list
 
 
-def getSepsForCandEdges(comps, seps):
+def get_seps_for_cand_edges(comps, seps):
     '''
     For every candidate edge (u,v) (edge that is formed by to vertices in different separated components given a separator)
     obtain the list of separators of u and v in the (decomposable) undirected graph associated to comps and seps.
@@ -142,7 +143,7 @@ def getSepsForCandEdges(comps, seps):
     return eto_seps
 
 
-def updateGraph(sol, dict_of_vars):
+def update_graph(sol, dict_of_vars):
     '''
     Parameters
     ----------
@@ -163,14 +164,15 @@ def updateGraph(sol, dict_of_vars):
         hold = dict_of_vars[key]
         if round(index_dict[hold]) == 1:
             new_edges.append(key[0])
+
     return new_edges
 
 
-def getSortedEdges(G):
+def get_sorted_edges(graph):
     '''
     Parameters
     ----------
-    G : A networkx graph G
+    graph : A networkx graph G
 
     Returns
     -------
@@ -178,14 +180,28 @@ def getSortedEdges(G):
     we have a < b.
 
     '''
-    edges = list(G.edges())
+    edges = list(graph.edges())
     for index, edge in enumerate(edges):
         edges[index] = tuple(sorted(edge))
     return edges
 
-def sameEdges(G1,G2):
-    edgesG1 = getSortedEdges(G1)
-    edgesG2 = getSortedEdges(G2)
+
+def mkdg_check(graph):
+    if nx.algorithms.chordal.is_chordal(graph):
+        cliques = list(nx.algorithms.clique.find_cliques(graph))
+        if len(cliques) == graph.number_of_nodes() - len(cliques[0]) + 1:
+            return True
+        else:
+            print("Graph is chordal, but not MKDG")
+            return False
+    else:
+        print("Graph is not chordal")
+        return False
+
+
+def same_edges(graph1, graph2):
+    edgesG1 = get_sorted_edges(graph1)
+    edgesG2 = get_sorted_edges(graph2)
     count = 0
     for edge in edgesG1:
         if edge in edgesG2:
@@ -195,14 +211,16 @@ def sameEdges(G1,G2):
 
     return percentage
 
-def differentEdges(G1,G2):
-    edgesG1 = getSortedEdges(G1)
-    edgesG2 = getSortedEdges(G2)
+
+def different_edges(graph1, graph2):
+    edgesG1 = get_sorted_edges(graph1)
+    edgesG2 = get_sorted_edges(graph2)
     count = 0
 
     for edge in edgesG1:
         if edge not in edgesG2:
             count += 1
+
     percentage = count / len(edgesG1)
 
     return percentage
