@@ -3,18 +3,13 @@ from itertools import combinations, product
 
 
 def mcs(graph):
-    '''
-    Parameters
-    ----------
-    graph : A networkx graph object which contains an undirected graph
+    """ Perform a maximum cardinality search and relabeling.
+    :param graph (nx.Graph): The chordal graph to label.
 
-    Returns
-    -------
-    relabeled : A networkx graph object which renumbers G
-    renumbering : A dictionary which maps the old numbering from G
-    to the new numbering in H
-
-    '''
+    :return relabeled (nx.Graph): The relabeled graph.
+    :return renumbering (dictionary): The dictionary which maps the old numbering of graph to the new numbering of
+        renumbering.
+    """
     count = 0
     vertices = set(graph.nodes)
     renumbering = {}
@@ -38,17 +33,13 @@ def mcs(graph):
 
 
 def chain_of_cliques(graph):
-    '''
-    Parameters
-    ----------
-    graph : A networkx graph object which contains an undirected
-    chordal graph
+    """Given a chordal graph, generate a list of cliques which satisfies the running intersection property.
 
-    Returns
-    -------
-    finalList : A list of cliques (list(set(int))) which satisfy the running
-    intersection property
-    '''
+    :param graph (nx.Graph) : The chordal graph.
+
+    :return final_list (list(set(int): The list of sets of vertices which satisfy the running intersection property.
+    """
+
     relabeled, renumbering = mcs(graph)
     inv_renumbering = {v: k for k, v in renumbering.items()}
     cliques = list(nx.algorithms.clique.find_cliques(relabeled))
@@ -69,16 +60,13 @@ def chain_of_cliques(graph):
 
 
 def get_separators(clique_list, unique=True):
-    '''
-    Parameters
-    ----------
-    clique_list : A list of cliques (list(set(int))) which satisfy the running
-    intersection property
+    """
+    :param clique_list list(set(int)): A list of cliques satisfying the running intersection property.
+    :param unique (bool): Whether the returned list of separators should have no duplicates (True)
+        or allow duplicates (False).
 
-    Returns
-    -------
-    sepList : A list of separators list(frozenset(int)) for the graph defined by cliqueList
-    '''
+    :return sep_list (list(int)): The list of separators.
+    """
     seen = clique_list.pop(0)
     sep_list = []
 
@@ -93,18 +81,14 @@ def get_separators(clique_list, unique=True):
 
 
 def get_comp_list(graph, sep_list):
-    '''
-    Parameters
-    ----------
-    graph : A networkx undirected graph
-    sep_list : A list of separators list(set(int))
+    """Given the chordal graph and the list of separators, obtain the list of connected components.
 
-    Returns
-    -------
-    compList : A list of the connected components list(list(set(int))) corresponding to each separator.
-    That is, compList[i] contains the connected components when s[i] is removed from G
+    :param graph (nx.Graph): The chordal graph.
+    :param sep_list (list(set(int)): The list of separators for graph.
 
-    '''
+    :return comp_list (list(list(int)): The list of connected components.
+    """
+
     comp_list = list()
     for S in sep_list:
         copied = graph.copy()
@@ -116,15 +100,15 @@ def get_comp_list(graph, sep_list):
 
 
 def get_seps_for_cand_edges(comps, seps):
-    '''
-    For every candidate edge (u,v) (edge that is formed by to vertices in different separated components given a separator)
-    obtain the list of separators of u and v in the (decomposable) undirected graph associated to comps and seps.
+    """For every candidate edge (u,v) (edge that is formed by to vertices in different separated components
+        given a separator) obtain the list of separators of u and v in the (decomposable) undirected
+        graph associated to comps and seps.
 
-    :param comps: a list of connected components separated by each of the separators in the list seps, list(list(set(int)
-    :param seps: a list of separators that separate the connected components in the list comps, list(set(int)
-    :param n: the number of vertices in the (decomposable) undirected graph
-    :return: A dictionary that maps every candidate edge, (a,b) where a and b are int and a<b, to its list of separators
-    '''
+    :param comps (list(list(int))): a list of connected components separated by each of the separators in the list seps.
+    :param seps (list(set(int))): a list of separators that separate the connected components in the list comps.
+
+    :return: A dictionary that maps every candidate edge, (a,b) where a and b are int and a<b, to its list of separators.
+    """
 
     eto_seps = dict()
     for i in range(len(comps)):
@@ -144,18 +128,15 @@ def get_seps_for_cand_edges(comps, seps):
 
 
 def update_graph(sol, dict_of_vars):
-    '''
-    Parameters
-    ----------
-    sol : The solution obtained by Gurobi's stdgrb.lp_solve method. This array encodes which edges will
+    """
+    :param sol (list(int)): The solution obtained by Gurobi. This array encodes which edges will
     be added to the graph. If sol[i] == 0, the edge is not added. If sol[i] == 1, the edge is added.
-    dict_of_vars : A dictionary which maps the decision variables to their respective index in sol.
+    :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in sol.
 
-    Returns
-    -------
-    newEdges : A list(tuple()) which contains the new edges to add to the graph.
 
-    '''
+    :return newEdges (list(tuple(int))): The list of new edges to add.
+
+    """
     index_dict = {}
     new_edges = []
     for i in range(0, len(sol)):
@@ -169,24 +150,29 @@ def update_graph(sol, dict_of_vars):
 
 
 def get_sorted_edges(graph):
-    '''
-    Parameters
-    ----------
-    graph : A networkx graph G
+    """Given a graph object, return the list of edges but ensures that for each (u,v) in Edges(graph), we have u < v.
 
-    Returns
-    -------
-    edges : the edges of G as a list(tuple()) such that for every tuple (a,b) in edges
-    we have a < b.
+    :param graph (nx.graph) : The graph which will yield the edge list.
 
-    '''
+    :return edges (list(tuple(int)) : the edges of graph as a list(tuple()) such that for every tuple (u,v) in edges
+    we have u < v.
+
+    """
     edges = list(graph.edges())
     for index, edge in enumerate(edges):
         edges[index] = tuple(sorted(edge))
     return edges
 
 
-def mkdg_check(graph):
+def is_mkdg(graph):
+    """A function which checks if a graph object is an MkDG. Executes print statements to describe current state of
+    the graph (graph is chordal, not MkDG OR graph is not chordal).
+
+    :param graph (nx.Graph): The graph we wish to check.
+
+    :return (bool):  True if the graph is an MKDG, False otherwise.
+    """
+
     if nx.algorithms.chordal.is_chordal(graph):
         cliques = list(nx.algorithms.clique.find_cliques(graph))
         if len(cliques) == graph.number_of_nodes() - len(cliques[0]) + 1:
@@ -200,6 +186,15 @@ def mkdg_check(graph):
 
 
 def same_edges(graph1, graph2):
+    """Compare (as a percentage) the number of edges in graph1 which are also contained in graph2. The percentage is
+        calculated as |edges(G1).intersection(edges(G2))|/|edges(G2)|
+
+    :param graph1 (nx.Graph): The graph we will compare.
+    :param graph2 (nx.Graph): The graph we will compare to.
+
+    :return percentage (float): The percentage as calculated in the above statement.
+    """
+
     edgesG1 = get_sorted_edges(graph1)
     edgesG2 = get_sorted_edges(graph2)
     count = 0
@@ -213,6 +208,14 @@ def same_edges(graph1, graph2):
 
 
 def different_edges(graph1, graph2):
+    """Compare (as a percentage) the number of edges in graph1 which are not contained in graph2. The percentage is
+            calculated as |edges(G1).setminus(edges(G2))|/|edges(G1)|
+
+        :param graph1 (nx.Graph): The graph we will compare.
+        :param graph2 (nx.Graph): The graph we will compare to.
+
+        :return percentage (float): The percentage as calculated in the above statement.
+        """
     edgesG1 = get_sorted_edges(graph1)
     edgesG2 = get_sorted_edges(graph2)
     count = 0

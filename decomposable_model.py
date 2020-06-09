@@ -13,7 +13,26 @@ from itertools import combinations
 
 
 class DecomposableModel:
+    """ A class for learning decomposable models from coarsened kDGs.
+
+    Attributes:
+        alpha (int): the equivalent sample size of the Dirichlet uniform prior.
+        data (np.array): An np.array which holds the data set.
+        num_vars (int): The number of variables.
+        data_frame (pd.DataFrame): The data frame version of data.
+        var_states (list): For each i in range(numvars), varstates[i] is the number of variable states observed.
+        bdeu (pgmpy.BDeuScore): A BDeuScore object with uniform prior alpha used to score networks.
+        undirected (nx.Graph): A networkx graph which stores the learned undirected models.
+        directed (pgmpy.BayesianModel): A pgmpy BayesianModel which stores the learned directed model via minimum I-map.
+
+
+    """
     def __init__(self, fileName, alpha=1):
+        """ Build the empty graph model with n=data.shape[1] vertices. Set other attributes for use in model learning.
+        Args:
+            :param fileName (string): The path of the .csv file containing the data.
+            :param alpha (int): the equivalent sample size of the Dirichlet uniform prior.
+        """
 
         self.alpha = alpha
         self.data = np.genfromtxt(fileName, delimiter=',')
@@ -30,9 +49,13 @@ class DecomposableModel:
         self.undirected = nx.Graph()
         self.undirected.add_nodes_from(range(self.num_vars))
 
-        self.directed = nx.Graph()
+        self.directed = BayesianModel()
 
     def mst(self):
+        """Builds the maximum spanning tree for the given data and alpha. The results is kept in the undirected
+        attribute.
+
+        """
         complete_graph = nx.Graph()
         lexicographic_edges = list(combinations(list(range(self.num_vars)), 2))
         weight_list = self.get_weight_list(lexicographic_edges)
@@ -44,8 +67,7 @@ class DecomposableModel:
         self.undirected.add_edges_from(edges)
 
     def get_score(self, V):
-        '''
-        The score function.
+        """ The score function.
 
         In the case of alpha=0, it computes the entropy of a given set of variables.
 
@@ -54,15 +76,12 @@ class DecomposableModel:
         of cases of the dataset in which variable V takes the value v, and r_V denotes the cardinality (the number of
         different values) of the set of variables V.
 
-        Remarks: this method only works for discrete random variables
+        Remarks: this method only works for discrete random variables.
 
-        :param V: A subset of variables given by their indices, list(int)
-        :param D: A data set, np.array(int) of dimension num_samples X num_variables.
-        :param r: The number of values that can take each variable in V, i.e. r[i] is the size of the support of V[i],
-        np.array(int) of dimension len(V)
-        :param alpha: the equivalent sample size of the Dirichlet uniform prior
-        :return: The empirical entropy of variables V given the data set D
-        '''
+        :param V (list): A subset of variables given by their indices, list(int).
+
+        :return scores (np.array): The BDeu scores of variables V given the data set D.
+        """
 
         # Obtain the cardinality of V
         if len(V) == 0:
@@ -84,25 +103,51 @@ class DecomposableModel:
             return -np.sum(N * np.log(N))
 
     def get_weight_list(self, edges):
-        weightList = []
+        """ Return the scores for edges which could be added to the empty graph.
+
+        :param edges (list(tuples)): The list of edges to consider adding to the empty graph.
+
+        :return weight_list (list):  The list of weights corresponding to each edge in edges.
+        """
+        weight_list = []
         for edge in edges:
-            weightList.append(self.get_score([edge[0]]) + self.get_score([edge[1]]) - self.get_score(list(edge))
+            weight_list.append(self.get_score([edge[0]]) + self.get_score([edge[1]]) - self.get_score(list(edge))
                               - self.get_score([]))
-        return weightList
+        return weight_list
 
     def get_objective(self, dict_of_vars):
-        c = np.zeros(len(dict_of_vars.keys()))
+        """ In the ILP model formulation of https://opt-ml.org/oldopt/papers/OPT2015_paper_36, this defines the vector
+        w_{u,v|S}. That is, each element is the BDeu score related to adding edge (u,v) given separator S.
+
+        :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
+
+        :return w (np.array): The vector of weights given the dictionary elements. That is, w[i] = score({u,v|S}).
+        """
+        w = np.zeros(len(dict_of_vars.keys()))
         for key in dict_of_vars.keys():
             to_scoreUVS = list({key[0][0], key[0][1]}.union(key[1]))
             to_scoreUS = list({key[0][0]}.union(key[1]))
             to_scoreVS = list({key[0][1]}.union(key[1]))
             to_scoreS = list(key[1])
 
-            c[dict_of_vars[key]] = self.get_score(to_scoreUS) + self.get_score(to_scoreVS) - \
+            w[dict_of_vars[key]] = self.get_score(to_scoreUS) + self.get_score(to_scoreVS) - \
                                    self.get_score(to_scoreUVS) - self.get_score(to_scoreS)
-        return c
+        return w
 
     def learn(self, k_max=np.inf, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False):
+        """An algorithm which performs the learning of kDGs (or MkDGs) by the coarsening procedure proposed in
+        https://opt-ml.org/oldopt/papers/OPT2015_paper_36. The learned graph is placed in the undirected attribute
+
+        :param k_max (int): The maximal clique size of the learned network.
+        :param l_max (int): The maximal length of an edge which may be considered for addition to the model.
+        :param max_time (float): The maximum running time of the coarsening algorithm.
+        :param max_time_gurobi (float): The maximum running time for each call to gurobi
+        :param maximal (bool): Whether to learn a kDG (False) or an MkDG (True).
+
+        Remarks: The maximal running time is only considers terminating the learning process after each
+        coarsening step. Therefore, the actual running time may be longer than what is specified by max_time
+
+        """
         self.mst()
         current_model = self.undirected
         sol = [1]
@@ -141,23 +186,29 @@ class DecomposableModel:
             else:
                 m.addConstr(A3 @ x <= b3, name="c3")
 
+
             m.optimize()
             sol = x.X
 
             new_edges = ch.update_graph(sol, dict_of_vars)
             e = edge_list + new_edges
             current_model = nx.Graph(e)
+
             end = time.time()
 
         self.undirected = current_model
 
-    def to_bn(self, graph):
+    def to_bn(self):
+        """ Given the undirected graph, return the directed model corresponding to the minimal I-map. The directed model is
+        placed in the directed attribute.
+
+        Remarks: This method supports models which are not connected.
+
+        """
         # Generate connected components
-        connected = list(nx.algorithms.components.connected_components(graph))
+        connected = list(nx.algorithms.components.connected_components(self.undirected))
         # Hold the edges of each connected component as a list(list())
         connected_comps = list()
-        # The final bn model
-        final_bn = BayesianModel()
         # If the graph is not completely connected
         if len(connected) > 1:
             for comp in connected:
@@ -166,7 +217,7 @@ class DecomposableModel:
                     edges_to_add = list()
                     temp = MarkovModel()
                     for vert1 in comp:
-                        neighbours = list(graph.neighbors(vert1))
+                        neighbours = list(self.undirected.neighbors(vert1))
                         for vert2 in neighbours:
                             if not ((vert1, vert2) in edges_to_add) and not ((vert2, vert1) in edges_to_add):
                                 edges_to_add.append((vert1, vert2))
@@ -176,22 +227,21 @@ class DecomposableModel:
                     temp_bn = temp.to_bayesian_model()
                     connected_comps.append(temp_bn)
                 else:
-                    final_bn.add_nodes_from(comp)
+                    self.directed.add_nodes_from(comp)
 
             for bn in connected_comps:
-                final_bn.add_nodes_from(list(bn.nodes))
-                final_bn.add_edges_from(list(bn.edges))
+                self.directed.add_nodes_from(list(bn.nodes))
+                self.directed.add_edges_from(list(bn.edges))
 
-            return final_bn
 
         else:
             # If the graph is completely connected, just add all edges to markov model
-            edges = list(graph.edges())
-            vertices = list(graph.nodes)
+            edges = list(self.undirected.edges())
+            vertices = list(self.undirected.nodes)
             mm = MarkovModel()
             mm.add_nodes_from(vertices)
             mm.add_edges_from(edges)
             bm = mm.to_bayesian_model()
 
-            return bm
+            self.directed = bm
 
