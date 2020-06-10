@@ -245,3 +245,13 @@ class DecomposableModel:
 
             self.directed = bm
 
+    def get_model_directed(self):
+        return self.directed
+
+    def get_model_undirected(self):
+        return self.undirected
+
+    def get_score_function(self):
+        return self.bdeu
+
+
