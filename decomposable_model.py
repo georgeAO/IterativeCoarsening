@@ -193,7 +193,7 @@ class DecomposableModel:
             new_edges = ch.update_graph(sol, dict_of_vars)
             e = edge_list + new_edges
             current_model = nx.Graph(e)
-            i+=1
+            i += 1
 
             end = time.time()
 
