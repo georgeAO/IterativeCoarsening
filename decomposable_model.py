@@ -155,7 +155,7 @@ class DecomposableModel:
         i = 2
         start = time.time()
         end = 0
-        while np.linalg.norm(sol, ord=1) > 0.01 and i <= k_max and (end - start) < max_time:
+        while np.linalg.norm(sol, ord=1) > 0.01 and i < k_max and (end - start) < max_time:
             edge_list = ch.get_sorted_edges(current_model)
             cliques = ch.chain_of_cliques(current_model)
             sep_list = ch.get_separators(cliques)
@@ -247,68 +247,94 @@ class DecomposableModel:
 
             self.directed = bm
 
-    def greedyApproach(data, varStates, k=np.inf, timeLimit=np.inf):
-        # build the mst spanning tree
-        initialGraph = CliqueTree()
-        start = time.time()
-        initialGraph.add_edge(list(MST(data, varStates)))
+    def greedy_learn(self, k_max=np.inf, time_limit=np.inf):
+        """An algorithm for learning kDGs using a greedy hill-climbing approach. The code is influenced by the design
+        of the hill climbing approach used in the pgmpy package
+        (https://pgmpy.org/_modules/pgmpy/estimators/HillClimbSearch.html). However, we only consider edge additions
+        which maintain chordality. The learned models are placed in the undirected and directed attributes.
 
-        # load BDeu scoring function
-        dataFrame = pd.DataFrame(data, columns=list(range(data.shape[1])))
-        BDeu = BDeuScore(dataFrame, equivalent_sample_size=1)
+        :param k_max (int): The maximal clique size of the graph to learn
+        :param time_limit: The time limit of the search
+        """
+        # build the mst spanning tree
+        initial_graph = CliqueTree()
+        start = time.time()
+        #Generate MST
+        self.mst()
+        for edge in list(self.get_model_undirected().edges()):
+            initial_graph.add_edge(edge[0], edge[1])
 
         # the best bn learned so far is the MST
-        best_bn = bn.to_BN(initialGraph.G)
+        self.to_bn()
+        best_bn = self.get_model_directed()
         # Flag which controls when the algorithm finishes
         add_edge = True
-        if k > 2:
+        if k_max > 2:
             while add_edge:
-                runningTime = time.time() - start
-                bestScoreDelta = (0, None)
-                if runningTime > timeLimit:
+                running_time = time.time() - start
+                best_score_delta = (0, None)
+                if running_time > time_limit:
                     break
                 current_bn = best_bn.copy()
                 add_edge = False
                 # make a list of all possible edges that could be added to the graph
-                diff = initialGraph.insertable
+                diff = initial_graph.insertable
                 for edge in diff:
-                    runningTime = time.time() - start
-                    if runningTime > timeLimit:
+                    running_time = time.time() - start
+                    if running_time > time_limit:
                         break
                     # add an edge to the graph
-                    initialGraph.add_edge([edge])
-                    cliques = initialGraph.nodes_in_clique
+                    initial_graph.add_edge(edge[0], edge[1])
+                    cliques = initial_graph.nodes_in_clique
                     # check if the graph is chordal and has the right clique number
-                    if getCliqueNum(cliques) <= k:
+                    if DecomposableModel.get_clique_num(cliques) <= k_max:
                         # get the score of the new graph
-                        greedy_bn, greedyScoreDelta = addEdgeToBn(edge, current_bn.copy(), BDeu)
+                        greedy_bn, greedy_score_delta = DecomposableModel.add_edge_to_bn(edge, current_bn.copy(), self.bdeu)
                         # is the score better than previous graphs?
-                        if greedyScoreDelta > bestScoreDelta[0]:
+                        if greedy_score_delta > best_score_delta[0]:
                             # If we add can add an edge, the algorithm should continue looking for more edges
                             add_edge = True
-                            bestScoreDelta = (greedyScoreDelta, edge)
+                            best_score_delta = (greedy_score_delta, edge)
                             best_bn = greedy_bn
 
                     # after we check the candidate edge, remove it from the graph and keep looking
-                    initialGraph.remove_edge(edge[0], edge[1])
+                    initial_graph.remove_edge(edge[0], edge[1])
 
                 # make the new initial graph the best graph from the previous search
                 if add_edge:
-                    initialGraph.add_edge([bestScoreDelta[1]])
+                    initial_graph.add_edge(best_score_delta[1][0], best_score_delta[1][1])
 
-                print('here')
+        self.undirected = initial_graph.G
+        self.directed = best_bn
 
-        return initialGraph, best_bn
+    @staticmethod
+    def get_clique_num(cliques):
+        """ A static method for greedy_learn which return the maximal clique size of a model.
 
-    def getCliqueNum(cliques):
-        cliqueNumber = 0
+        :param cliques (dict): The dictionary given by the nodes_in_clique attribute of CliqueTree. The cliques are the
+            dictionary keys.
+
+        :return clique_number (int): The number of vertices in the largest clique.
+        """
+        clique_number = 0
         for key in cliques.keys():
-            if len(cliques[key]) > cliqueNumber:
-                cliqueNumber = len(cliques[key])
+            if len(cliques[key]) > clique_number:
+                clique_number = len(cliques[key])
 
-        return cliqueNumber
+        return clique_number
 
-    def addEdgeToBn(edge, bn, BDeu):
+    @staticmethod
+    def add_edge_to_bn(edge, bn, BDeu):
+        """ A static method for greedy_learn which computes the local score delta for adding an edge. The correct
+            direction of the edge is also determined for the directed model.
+
+        :param edge tuple(int): The edge (undirected) to consider adding.
+        :param bn (pgmpy.BayesianModel): The current bn model we wish to add edge to.
+        :param BDeu (pgmpy.BDeuScore): The BDeu score object which calculate the local scores.
+
+        :return bn (pgmpy.BayesianModel): The bn provided by the user with edge added in the correct orientation
+        :return score_delta (float): The best local score delta for adding the edge to the current bn.
+        """
         try:
             local_score = BDeu.local_score
             bn.add_edge(edge[0], edge[1])
