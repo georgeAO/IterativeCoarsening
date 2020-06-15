@@ -8,6 +8,7 @@ import time as time
 import chordal as ch
 import constraints as co
 import gurobipy as gp
+from cliquetree.cliquetree import CliqueTree
 from gurobipy import GRB
 from itertools import combinations
 
@@ -245,6 +246,105 @@ class DecomposableModel:
             bm = mm.to_bayesian_model()
 
             self.directed = bm
+
+    def greedyApproach(data, varStates, k=np.inf, timeLimit=np.inf):
+        # build the mst spanning tree
+        initialGraph = CliqueTree()
+        start = time.time()
+        initialGraph.add_edge(list(MST(data, varStates)))
+
+        # load BDeu scoring function
+        dataFrame = pd.DataFrame(data, columns=list(range(data.shape[1])))
+        BDeu = BDeuScore(dataFrame, equivalent_sample_size=1)
+
+        # the best bn learned so far is the MST
+        best_bn = bn.to_BN(initialGraph.G)
+        # Flag which controls when the algorithm finishes
+        add_edge = True
+        if k > 2:
+            while add_edge:
+                runningTime = time.time() - start
+                bestScoreDelta = (0, None)
+                if runningTime > timeLimit:
+                    break
+                current_bn = best_bn.copy()
+                add_edge = False
+                # make a list of all possible edges that could be added to the graph
+                diff = initialGraph.insertable
+                for edge in diff:
+                    runningTime = time.time() - start
+                    if runningTime > timeLimit:
+                        break
+                    # add an edge to the graph
+                    initialGraph.add_edge([edge])
+                    cliques = initialGraph.nodes_in_clique
+                    # check if the graph is chordal and has the right clique number
+                    if getCliqueNum(cliques) <= k:
+                        # get the score of the new graph
+                        greedy_bn, greedyScoreDelta = addEdgeToBn(edge, current_bn.copy(), BDeu)
+                        # is the score better than previous graphs?
+                        if greedyScoreDelta > bestScoreDelta[0]:
+                            # If we add can add an edge, the algorithm should continue looking for more edges
+                            add_edge = True
+                            bestScoreDelta = (greedyScoreDelta, edge)
+                            best_bn = greedy_bn
+
+                    # after we check the candidate edge, remove it from the graph and keep looking
+                    initialGraph.remove_edge(edge[0], edge[1])
+
+                # make the new initial graph the best graph from the previous search
+                if add_edge:
+                    initialGraph.add_edge([bestScoreDelta[1]])
+
+                print('here')
+
+        return initialGraph, best_bn
+
+    def getCliqueNum(cliques):
+        cliqueNumber = 0
+        for key in cliques.keys():
+            if len(cliques[key]) > cliqueNumber:
+                cliqueNumber = len(cliques[key])
+
+        return cliqueNumber
+
+    def addEdgeToBn(edge, bn, BDeu):
+        try:
+            local_score = BDeu.local_score
+            bn.add_edge(edge[0], edge[1])
+            new_parents = bn.get_parents(edge[1])
+            old_parents = list(set(new_parents) - {edge[0]})
+            score_delta1 = local_score(edge[1], new_parents) - local_score(edge[1], old_parents)
+
+            bn.remove_edge(edge[0], edge[1])
+
+            bn.add_edge(edge[1], edge[0])
+            new_parents = bn.get_parents(edge[0])
+            old_parents = list(set(new_parents) - {edge[1]})
+            score_delta2 = local_score(edge[0], new_parents) - local_score(edge[0], old_parents)
+
+            bn.remove_edge(edge[1], edge[0])
+
+            if score_delta1 > score_delta2:
+                bn.add_edge(edge[0], edge[1])
+                return bn, score_delta1
+            else:
+                bn.add_edge(edge[1], edge[0])
+                return bn, score_delta2
+        except ValueError:
+            try:
+                bn.add_edge(edge[0], edge[1])
+                new_parents = bn.get_parents(edge[1])
+                old_parents = list(set(new_parents) - {edge[0]})
+                score_delta1 = local_score(edge[1], new_parents) - local_score(edge[1], old_parents)
+
+                return bn, score_delta1
+            except ValueError:
+                bn.add_edge(edge[1], edge[0])
+                new_parents = bn.get_parents(edge[0])
+                old_parents = list(set(new_parents) - {edge[1]})
+                score_delta2 = local_score(edge[0], new_parents) - local_score(edge[0], old_parents)
+                return bn, score_delta2
 
     def get_model_directed(self):
         return self.directed
