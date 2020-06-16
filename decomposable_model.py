@@ -23,6 +23,7 @@ class DecomposableModel:
         data_frame (pd.DataFrame): The data frame version of data.
         var_states (list): For each i in range(numvars), varstates[i] is the number of variable states observed.
         bdeu (pgmpy.BDeuScore): A BDeuScore object with uniform prior alpha used to score networks.
+        mst (nx.Graph): A copy of the maximal spanning tree which is learned from the BDeu score of the data
         undirected (nx.Graph): A networkx graph which stores the learned undirected models.
         directed (pgmpy.BayesianModel): A pgmpy BayesianModel which stores the learned directed model via minimum I-map.
 
@@ -50,6 +51,8 @@ class DecomposableModel:
         self.undirected = nx.Graph()
         self.undirected.add_nodes_from(range(self.num_vars))
 
+        self.maxtree = self.undirected.copy()
+
         self.directed = BayesianModel()
 
     def mst(self):
@@ -65,7 +68,11 @@ class DecomposableModel:
             complete_graph.add_edge(edge[0], edge[1], weight=-1 * weight_list[index])
 
         edges = list(nx.algorithms.tree.minimum_spanning_edges(complete_graph, algorithm='kruskal', data=False))
-        self.undirected.add_edges_from(edges)
+        self.maxtree.add_edges_from(edges)
+
+        if nx.classes.function.is_empty(self.directed):
+            self.undirected = self.maxtree.copy()
+
 
     def get_score(self, V):
         """ The score function.
@@ -149,8 +156,10 @@ class DecomposableModel:
         coarsening step. Therefore, the actual running time may be longer than what is specified by max_time
 
         """
-        self.mst()
-        current_model = self.undirected
+        if nx.classes.function.is_empty(self.maxtree):
+            self.mst()
+
+        current_model = self.maxtree
         sol = [1]
         i = 2
         start = time.time()
@@ -200,52 +209,66 @@ class DecomposableModel:
 
         self.undirected = current_model
 
-    def to_bn(self):
+    def to_bn(self, use_mst=False):
         """ Given the undirected graph, return the directed model corresponding to the minimal I-map. The directed model is
         placed in the directed attribute.
 
         Remarks: This method supports models which are not connected.
 
+        :param use_mst (boolean): To direct a prelearned model in the directed attribute, direct_mst=False. To obtain
+            the directed model from the maximum spanning tree learned by self.mst, use direct_mst=True.
         """
+
         # Generate connected components
-        connected = list(nx.algorithms.components.connected_components(self.undirected))
-        # Hold the edges of each connected component as a list(list())
-        connected_comps = list()
-        # If the graph is not completely connected
-        if len(connected) > 1:
-            for comp in connected:
-                # If the connected component is not a single vertex
-                if len(comp) > 1:
-                    edges_to_add = list()
-                    temp = MarkovModel()
-                    for vert1 in comp:
-                        neighbours = list(self.undirected.neighbors(vert1))
-                        for vert2 in neighbours:
-                            if not ((vert1, vert2) in edges_to_add) and not ((vert2, vert1) in edges_to_add):
-                                edges_to_add.append((vert1, vert2))
-
-                    temp.add_nodes_from(comp)
-                    temp.add_edges_from(edges_to_add)
-                    temp_bn = temp.to_bayesian_model()
-                    connected_comps.append(temp_bn)
-                else:
-                    self.directed.add_nodes_from(comp)
-
-            for bn in connected_comps:
-                self.directed.add_nodes_from(list(bn.nodes))
-                self.directed.add_edges_from(list(bn.edges))
-
-
-        else:
-            # If the graph is completely connected, just add all edges to markov model
-            edges = list(self.undirected.edges())
-            vertices = list(self.undirected.nodes)
+        if use_mst:
+            edges = list(self.maxtree.edges())
+            vertices = list(self.maxtree.nodes)
             mm = MarkovModel()
             mm.add_nodes_from(vertices)
             mm.add_edges_from(edges)
             bm = mm.to_bayesian_model()
 
             self.directed = bm
+
+        else:
+            connected = list(nx.algorithms.components.connected_components(self.undirected))
+            # Hold the edges of each connected component as a list(list())
+            connected_comps = list()
+            # If the graph is not completely connected
+            if len(connected) > 1:
+                self.directed = BayesianModel()
+                for comp in connected:
+                    # If the connected component is not a single vertex
+                    if len(comp) > 1:
+                        edges_to_add = list()
+                        temp = MarkovModel()
+                        for vert1 in comp:
+                            neighbours = list(self.undirected.neighbors(vert1))
+                            for vert2 in neighbours:
+                                if not ((vert1, vert2) in edges_to_add) and not ((vert2, vert1) in edges_to_add):
+                                    edges_to_add.append((vert1, vert2))
+
+                        temp.add_nodes_from(comp)
+                        temp.add_edges_from(edges_to_add)
+                        temp_bn = temp.to_bayesian_model()
+                        connected_comps.append(temp_bn)
+                    else:
+                        self.directed.add_nodes_from(comp)
+
+                for bn in connected_comps:
+                    self.directed.add_nodes_from(list(bn.nodes))
+                    self.directed.add_edges_from(list(bn.edges))
+
+            else:
+                # If the graph is completely connected, just add all edges to markov model
+                edges = list(self.undirected.edges())
+                vertices = list(self.undirected.nodes)
+                mm = MarkovModel()
+                mm.add_nodes_from(vertices)
+                mm.add_edges_from(edges)
+                bm = mm.to_bayesian_model()
+
+                self.directed = bm
 
     def greedy_learn(self, k_max=np.inf, time_limit=np.inf):
         """An algorithm for learning kDGs using a greedy hill-climbing approach. The code is influenced by the design
@@ -260,12 +283,14 @@ class DecomposableModel:
         initial_graph = CliqueTree()
         start = time.time()
         #Generate MST
-        self.mst()
-        for edge in list(self.get_model_undirected().edges()):
+        if nx.classes.function.is_empty(self.maxtree):
+            self.mst()
+
+        for edge in list(self.get_model_mst().edges()):
             initial_graph.add_edge(edge[0], edge[1])
 
         # the best bn learned so far is the MST
-        self.to_bn()
+        self.to_bn(use_mst=True)
         best_bn = self.get_model_directed()
         # Flag which controls when the algorithm finishes
         add_edge = True
@@ -377,6 +402,9 @@ class DecomposableModel:
 
     def get_model_undirected(self):
         return self.undirected
+
+    def get_model_mst(self):
+        return self.maxtree
 
     def get_score_function(self):
         return self.bdeu
