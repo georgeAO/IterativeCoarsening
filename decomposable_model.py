@@ -8,7 +8,7 @@ import time as time
 import chordal as ch
 import constraints as co
 import gurobipy as gp
-from cliquetree.cliquetree import CliqueTree
+from cliquetree import CliqueTree
 from gurobipy import GRB
 from itertools import combinations
 

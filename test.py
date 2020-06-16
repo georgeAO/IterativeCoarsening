@@ -1,7 +1,7 @@
 from decomposable_model import DecomposableModel
 
 #build the decomposable dodel object with relevant data
-test = DecomposableModel("Wine.csv")
+test = DecomposableModel("water1000.csv")
 #learn the model using the kdg approach
 test.learn(k_max=4)
 #convert learned (undirected) model to directed with minimal I-map
