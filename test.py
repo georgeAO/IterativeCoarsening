@@ -1,7 +1,7 @@
 from decomposable_model import DecomposableModel
 
 #build the decomposable dodel object with relevant data
-test = DecomposableModel("water1000.csv")
+test = DecomposableModel("data/water1000.csv")
 #learn the model using the kdg approach
 test.learn(k_max=4)
 #convert learned (undirected) model to directed with minimal I-map
@@ -16,5 +16,5 @@ greedy_model = test.get_model_directed()
 bdeu = test.get_score_function()
 
 #print results
-print(bdeu.score(kdg_model))
-print(bdeu.score(greedy_model))
+print("kDG score is " + str(bdeu.score(kdg_model)))
+print("greedy score is " + str(bdeu.score(greedy_model)))
