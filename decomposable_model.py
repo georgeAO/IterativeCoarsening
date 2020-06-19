@@ -17,7 +17,7 @@ class DecomposableModel:
     """ A class for learning decomposable models from coarsened kDGs.
 
     Attributes:
-        alpha (int): the equivalent sample size of the Dirichlet uniform prior.
+        alpha (float): the equivalent sample size of the Dirichlet uniform prior.
         data (np.array): An np.array which holds the data set.
         num_vars (int): The number of variables.
         data_frame (pd.DataFrame): The data frame version of data.
