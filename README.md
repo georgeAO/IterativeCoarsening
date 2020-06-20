@@ -12,7 +12,7 @@ described in https://opt-ml.org/oldopt/papers/OPT2015_paper_36.pdf.
 This work learns decomposable models through a process named *Iterative Coarsening* (IC). Additionally, we implement a greedy hill-climbing approach which learns decomposable models by adding a single edge to the model in each iteration which maximizes a local scoring function. Currently, both methods support:
 
 - Learning with real data sets using the BDeu scoring function.
-- Bouding the maximal clique size of a learned model. 
+- Bounding the maximal clique size of a learned model. 
 - Learning graphs which are a maximal kDG (IC only).
 
 At present, both methods begin the learning process by using a maximal spanning tree. Hence, if the optimal graph is one which is which is very disconnected, these implementations may not obtain ideal results. However, we envision to update both methods soon to account for this. 
@@ -69,7 +69,25 @@ Parameters:
 * time_limit : float (or np.inf), the maximal running time for hill-climbing. 
 
 
+### Convert a directed model using a (previously) undirected model with `to_bn`:
 
+```python
+model.to_bn:(use_mst=False)
+```
+
+Parameters:
+* use_mst : bool, direct an undirected model using minimum I-map. If use_mst is True, then the directed model is obtained from the maximum spanning tree. If false, then it uses the current undirected graph previously learned.
+
+**Note: For greedy_learn method it is not necessary to convert the learned model with to_bn as the greedy approach learns the undirected and directed model at the same time.**
+
+### Obtain a directed model with  `get_model_directed`:
+
+```python
+directed_model = model.get_model_directed()
+```
+
+returns:
+* directed_model : pgmpy.BayesianModel, the learned directed model.
 ---
 
 ## Example 
