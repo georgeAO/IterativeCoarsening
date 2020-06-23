@@ -15,9 +15,8 @@ from itertools import combinations
 
 class DecomposableModel:
     """ A class for learning decomposable models from coarsened kDGs.
-
     Attributes:
-        alpha (float): the equivalent sample size of the Dirichlet uniform prior.
+        alpha (int): the equivalent sample size of the Dirichlet uniform prior.
         data (np.array): An np.array which holds the data set.
         num_vars (int): The number of variables.
         data_frame (pd.DataFrame): The data frame version of data.
@@ -26,8 +25,6 @@ class DecomposableModel:
         mst (nx.Graph): A copy of the maximal spanning tree which is learned from the BDeu score of the data
         undirected (nx.Graph): A networkx graph which stores the learned undirected models.
         directed (pgmpy.BayesianModel): A pgmpy BayesianModel which stores the learned directed model via minimum I-map.
-
-
     """
     def __init__(self, fileName, alpha=1):
         """ Build the empty graph model with n=data.shape[1] vertices. Set other attributes for use in model learning.
@@ -58,7 +55,6 @@ class DecomposableModel:
     def mst(self):
         """Builds the maximum spanning tree for the given data and alpha. The results is kept in the undirected
         attribute.
-
         """
         complete_graph = nx.Graph()
         lexicographic_edges = list(combinations(list(range(self.num_vars)), 2))
@@ -76,18 +72,13 @@ class DecomposableModel:
 
     def get_score(self, V):
         """ The score function.
-
         In the case of alpha=0, it computes the entropy of a given set of variables.
-
         In the case of alpha>0, it computes the BDeu score with equivalent sample size equal to alpha associated to
         a set of variables: BDeu(V)= sum_v ln(gamma(N_v + alpha/r_V))- ln(gamma(alpha/r_V) where N_v denotes the number
         of cases of the dataset in which variable V takes the value v, and r_V denotes the cardinality (the number of
         different values) of the set of variables V.
-
         Remarks: this method only works for discrete random variables.
-
         :param V (list): A subset of variables given by their indices, list(int).
-
         :return scores (np.array): The BDeu scores of variables V given the data set D.
         """
 
@@ -112,9 +103,7 @@ class DecomposableModel:
 
     def get_weight_list(self, edges):
         """ Return the scores for edges which could be added to the empty graph.
-
         :param edges (list(tuples)): The list of edges to consider adding to the empty graph.
-
         :return weight_list (list):  The list of weights corresponding to each edge in edges.
         """
         weight_list = []
@@ -126,9 +115,7 @@ class DecomposableModel:
     def get_objective(self, dict_of_vars):
         """ In the ILP model formulation of https://opt-ml.org/oldopt/papers/OPT2015_paper_36, this defines the vector
         w_{u,v|S}. That is, each element is the BDeu score related to adding edge (u,v) given separator S.
-
         :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
-
         :return w (np.array): The vector of weights given the dictionary elements. That is, w[i] = score({u,v|S}).
         """
         w = np.zeros(len(dict_of_vars.keys()))
@@ -145,16 +132,13 @@ class DecomposableModel:
     def learn(self, k_max=np.inf, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False):
         """An algorithm which performs the learning of kDGs (or MkDGs) by the coarsening procedure proposed in
         https://opt-ml.org/oldopt/papers/OPT2015_paper_36. The learned graph is placed in the undirected attribute
-
         :param k_max (int): The maximal clique size of the learned network.
         :param l_max (int): The maximal length of an edge which may be considered for addition to the model.
         :param max_time (float): The maximum running time of the coarsening algorithm.
         :param max_time_gurobi (float): The maximum running time for each call to gurobi
         :param maximal (bool): Whether to learn a kDG (False) or an MkDG (True).
-
         Remarks: The maximal running time is only considers terminating the learning process after each
         coarsening step. Therefore, the actual running time may be longer than what is specified by max_time
-
         """
         if nx.classes.function.is_empty(self.maxtree):
             self.mst()
@@ -212,9 +196,7 @@ class DecomposableModel:
     def to_bn(self, use_mst=False):
         """ Given the undirected graph, return the directed model corresponding to the minimal I-map. The directed model is
         placed in the directed attribute.
-
         Remarks: This method supports models which are not connected.
-
         :param use_mst (boolean): To direct a prelearned model in the directed attribute, direct_mst=False. To obtain
             the directed model from the maximum spanning tree learned by self.mst, use direct_mst=True.
         """
@@ -275,7 +257,6 @@ class DecomposableModel:
         of the hill climbing approach used in the pgmpy package
         (https://pgmpy.org/_modules/pgmpy/estimators/HillClimbSearch.html). However, we only consider edge additions
         which maintain chordality. The learned models are placed in the undirected and directed attributes.
-
         :param k_max (int): The maximal clique size of the graph to learn
         :param time_limit: The time limit of the search
         """
@@ -335,10 +316,8 @@ class DecomposableModel:
     @staticmethod
     def get_clique_num(cliques):
         """ A static method for greedy_learn which return the maximal clique size of a model.
-
         :param cliques (dict): The dictionary given by the nodes_in_clique attribute of CliqueTree. The cliques are the
             dictionary keys.
-
         :return clique_number (int): The number of vertices in the largest clique.
         """
         clique_number = 0
@@ -352,11 +331,9 @@ class DecomposableModel:
     def add_edge_to_bn(edge, bn, BDeu):
         """ A static method for greedy_learn which computes the local score delta for adding an edge. The correct
             direction of the edge is also determined for the directed model.
-
         :param edge tuple(int): The edge (undirected) to consider adding.
         :param bn (pgmpy.BayesianModel): The current bn model we wish to add edge to.
         :param BDeu (pgmpy.BDeuScore): The BDeu score object which calculate the local scores.
-
         :return bn (pgmpy.BayesianModel): The bn provided by the user with edge added in the correct orientation
         :return score_delta (float): The best local score delta for adding the edge to the current bn.
         """

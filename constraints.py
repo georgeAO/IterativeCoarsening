@@ -6,9 +6,7 @@ from itertools import combinations, chain
 def powerset(iterable):
     """A customized version of powerset which produces all subsets of iterable of length 2 to length(iterable)
         i.e. powerset([1,2,3]) --> (1,2) (1,3) (2,3) (1,2,3).
-
     :param iterable (iterable object): The items to iterate over.
-
     :return (chain): A powerset as described above.
     """
 
@@ -19,11 +17,9 @@ def powerset(iterable):
 
 def is_it_possible(e, s, e_to_seps):
     """Checks if it is possible to add an edge due to a separator given the current set of minimal separators.
-
     :param e (tuple(int)): candidate edge, tuple of ints (u,v) where u<v.
     :param s set(int): separator.
     :param e_to_seps (dictionary): Dictionary from edges to list of separators.
-
     :return (bool): true if it is possible to add the edge using the minimal separators.
     """
 
@@ -50,14 +46,11 @@ def is_it_possible(e, s, e_to_seps):
 
 def generate_dec_variables(e_to_seps, l):
     """Obtains the decision variables X_{u,v|S} codified in terms of the edge and the separator, ((u,v),S).
-
     Remark: only the edges due to a separator that can be added given the current list of minimal separators
     are generated.
-
     :param e_to_seps (dictionary): A dictionary that maps every candidate edge, (a,b) where a and b are int and a<b,
     to its list of separators (see function getSepsForCandEdges(comps,seps,n)).
     :param l: the constraint to the maximum length of an edge to be considered a variable of the problem.
-
     :return dec_vars list(tuple): A list with the decision variables X_{u,v|S}, list(tuples) where every tuple
     has the form ((u,v),S), with u and v are ints and u < v, and S is a set of integers.
     """
@@ -75,21 +68,16 @@ def generate_dec_variables(e_to_seps, l):
 def type1(e_to_seps, dict_of_vars):
     """ Obtains the type 1 constraints of the ILP formulation: this constraints guarantee that each edge can be added
     once at most, due to a single separator.
-
     Constr1:
     for each (u,v) sum_{S in seps(u,v)} X_u,v|S <=1
     where seps(u,v) denotes all the separators of u and v in G
     Format:
     A constraint is codified as [e,S1,...,Sm] where {S1,...,Sm}= seps(u,v)
-
     Remark: For the purposes of building the ILP model, the constraint is built as A1 * x <= b1, where A1 is
     a matrix and b1 is a vector.
-
-
     :param e_to_seps (dictionary): A dictionary that maps every candidate edge, (a,b) where a and b are int and a < b,
     to its list of separators (see function get_seps_for_cand_edges in chordal.py).
     :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
-
     :return A1 (sp.lil_matrix): The constraint matrix.
     :return b1 (np.array): The upper bound vector.
     """
@@ -123,16 +111,12 @@ def type1(e_to_seps, dict_of_vars):
 
 def type2(e_to_seps, dict_of_vars, edge_list, k):
     """Build the type 2 constraints, which guarantee that (u, v) is in the neighborhood of S in the solution.
-
         Remark: For the purposes of building the ILP model, the constraint is built as A2u * x <= b2u, and
         A2v * x <= b2v
-
-
         :param e_to_seps (dictionary): A dictionary that maps every candidate edge, (a,b) where a and b are
         int and a < b, to its list of separators (see function get_seps_for_cand_edges in chordal.py).
         :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
         :param k (int): the clique number (maximal clique size) of the current model.
-
         :return A2u (sp.lil_matrix): A constraint matrix.
         :return A2v (sp.lil_matrix): A constraint matrix.
         :return b2u (np.array): An upper bound vector correspnding to A2u.
@@ -171,12 +155,9 @@ def type2(e_to_seps, dict_of_vars, edge_list, k):
 def type3(sep_to_comps, dict_of_vars):
     """Build the type 3 constraints, which guarantee that the vertices u and v were separated by S
         before the edge was added.
-
          Remark: For the purposes of building the ILP model, the constraint is built as A3 * x <= b3.
-
          :param sep_to_comps (dictionary): A dictionary that maps every separator to its connected components.
          :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
-
          :return A3 (sp.lil_matrix): A constraint matrix.
          :return b3 (np.array): An upper bound vector correspnding to A2u.
          """
