@@ -145,12 +145,21 @@ class DecomposableModel:
 
         current_model = self.maxtree
         sol = [1]
-        i = 2
+        current_max_clique = 2
         start = time.time()
         end = 0
-        while np.linalg.norm(sol, ord=1) > 0.01 and i < k_max and (end - start) < max_time:
+        while np.linalg.norm(sol, ord=1) > 0.01 and (end - start) < max_time:
             edge_list = ch.get_sorted_edges(current_model)
             cliques = ch.chain_of_cliques(current_model)
+
+            if not maximal:
+                for clique in cliques:
+                    if len(clique) > current_max_clique:
+                        current_max_clique = len(clique)
+
+            if current_max_clique == k_max:
+                break
+
             sep_list = ch.get_separators(cliques)
             comps = ch.get_comp_list(current_model, sep_list)
             sep_to_comps = dict(zip(sep_list, comps))
@@ -159,7 +168,7 @@ class DecomposableModel:
             dict_of_vars = {uvS: ind for ind, uvS in enumerate(list_vars)}
             c = self.get_objective(dict_of_vars)
 
-            m = gp.Model("iterate" + str(i))
+            m = gp.Model("iterate" + str(current_max_clique))
             x = m.addMVar(shape=len(c), vtype=GRB.BINARY, name="x")
             m.setObjective(c @ x, GRB.MAXIMIZE)
             m.Params.MIPFocus = 1
@@ -168,7 +177,7 @@ class DecomposableModel:
             A1, b1 = co.type1(e_to_seps, dict_of_vars)
             m.addConstr(A1 @ x <= b1, name="c1")
 
-            A2u, b2u, A2v, b2v = co.type2(e_to_seps, dict_of_vars, edge_list, i)
+            A2u, b2u, A2v, b2v = co.type2(e_to_seps, dict_of_vars, edge_list)
             m.addConstr(A2u @ x <= b2u, name="c2u")
             m.addConstr(A2v @ x <= b2v, name="c2v")
 
@@ -187,7 +196,6 @@ class DecomposableModel:
             new_edges = ch.update_graph(sol, dict_of_vars)
             e = edge_list + new_edges
             current_model = nx.Graph(e)
-            i += 1
 
             end = time.time()
 
@@ -251,6 +259,79 @@ class DecomposableModel:
                 bm = mm.to_bayesian_model()
 
                 self.directed = bm
+
+    def fic(self):
+        """It obtain the maximal set of edges of length 1 with the maximum total weight that can be added to the current
+        structure. This is equivalent to adding edges of length 1 with the ILP formulation with the equality condition in
+        type 3 constraints
+
+
+        :return: The set of edges due to the different separators that can be added, list(((u,v),S) where S is a
+        frozenset(int) and u< v
+        """
+        current_model = self.undirected
+        cliques = ch.chain_of_cliques(current_model)
+        sep_list = ch.get_separators(cliques)
+        comps = ch.get_comp_list(current_model, sep_list)
+        sep_to_comp = dict(zip(sep_list, comps))
+        edges = list()
+        for S in sep_to_comp:
+            # Compute the weights an select the best edges among different connected components in the mantle
+            n = len(sep_to_comp[S])
+            E = np.ndarray(shape=(n, n, 2), dtype=int)
+            W = np.zeros(shape=(n, n), dtype=float)
+            for i in range(n - 1):
+                for j in range(i + 1, n):
+                    wMax = -np.inf
+                    uMax = -1
+                    vMax = -1
+                    for u in sep_to_comp[S][i]:
+                        for v in sep_to_comp[S][j]:
+                            # Replace this function by the function in which you compute the score
+                            w = self.get_score([u] + list(S)) + self.get_score([v] + list(S)) \
+                                - self.get_score([u, v] + list(S)) - self.get_score(list(S))
+                            if (w > wMax):
+                                wMax = w
+                                uMax = u
+                                vMax = v
+                    E[i, j] = [uMax, vMax]
+                    W[i, j] = wMax
+                    E[j, i] = [uMax, vMax]
+                    W[j, i] = wMax
+
+            # Construct the maximum weighted spanning tree (Prim's algorithm with adjacency lists) coarser than the given forest
+            unvisited = list(range(1, n))
+            maxU = np.zeros(n).astype(int)
+            maxW = W[0, :]
+
+            for l in range(n - 1):
+                ind = np.argmax(maxW[unvisited])
+                v = unvisited[ind]
+                u = maxU[v]
+
+                if E[u, v][0] < E[u, v][1]:
+                    e = (E[u, v][0], E[u, v][1])
+                else:
+                    e = (E[u, v][1], E[u, v][0])
+                edges.append((e, S))
+                del unvisited[ind]
+                for w in unvisited:
+                    if (maxW[w] < W[v, w]):
+                        maxW[w] = W[v, w]
+                        maxU[w] = v
+
+        to_add = [item[0] for item in edges]
+
+        return to_add
+
+    def coarsen(self):
+        """Coarsen the current model in self.directed by using the procedure described in
+            "Efficient approximation of probability distributions with k-order decomposable models". This approach
+            is called Forced Iterative Coarsening (FIC) in "Learning decomposable models by coarsening".
+        """
+
+        edges_to_add = self.fic()
+        self.undirected.add_edges_from(edges_to_add)
 
     def greedy_learn(self, k_max=np.inf, time_limit=np.inf):
         """An algorithm for learning kDGs using a greedy hill-climbing approach. The code is influenced by the design
@@ -375,13 +456,13 @@ class DecomposableModel:
                 return bn, score_delta2
 
     def get_model_directed(self):
-        return self.directed
+        return self.directed.copy()
 
     def get_model_undirected(self):
-        return self.undirected
+        return self.undirected.copy()
 
     def get_model_mst(self):
-        return self.maxtree
+        return self.maxtree.copy()
 
     def get_score_function(self):
         return self.bdeu

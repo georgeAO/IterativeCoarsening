@@ -109,14 +109,14 @@ def type1(e_to_seps, dict_of_vars):
     return A1, b1
 
 
-def type2(e_to_seps, dict_of_vars, edge_list, k):
+def type2(e_to_seps, dict_of_vars, edge_list):
     """Build the type 2 constraints, which guarantee that (u, v) is in the neighborhood of S in the solution.
         Remark: For the purposes of building the ILP model, the constraint is built as A2u * x <= b2u, and
         A2v * x <= b2v
         :param e_to_seps (dictionary): A dictionary that maps every candidate edge, (a,b) where a and b are
         int and a < b, to its list of separators (see function get_seps_for_cand_edges in chordal.py).
         :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
-        :param k (int): the clique number (maximal clique size) of the current model.
+
         :return A2u (sp.lil_matrix): A constraint matrix.
         :return A2v (sp.lil_matrix): A constraint matrix.
         :return b2u (np.array): An upper bound vector correspnding to A2u.
@@ -145,8 +145,8 @@ def type2(e_to_seps, dict_of_vars, edge_list, k):
                 b2u[count] += 1
             if pair2 in edge_list:
                 b2v[count] += 1
-        A2u[count, dict_of_vars[dec_var]] = k - 1
-        A2v[count, dict_of_vars[dec_var]] = k - 1
+        A2u[count, dict_of_vars[dec_var]] = len(dec_var[1])
+        A2v[count, dict_of_vars[dec_var]] = len(dec_var[1])
         count += 1
 
     return A2u, b2u, A2v, b2v
