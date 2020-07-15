@@ -26,6 +26,7 @@ class DecomposableModel:
         undirected (nx.Graph): A networkx graph which stores the learned undirected models.
         directed (pgmpy.BayesianModel): A pgmpy BayesianModel which stores the learned directed model via minimum I-map.
     """
+
     def __init__(self, fileName, alpha=1):
         """ Build the empty graph model with n=data.shape[1] vertices. Set other attributes for use in model learning.
         Args:
@@ -38,7 +39,6 @@ class DecomposableModel:
         self.num_vars = self.data.shape[1]
         self.data_frame = pd.DataFrame(self.data, columns=list(range(self.num_vars)))
         self.var_states = []
-
 
         for index in range(len(self.data_frame.columns)):
             self.var_states.append(self.data_frame[index].nunique())
@@ -68,7 +68,6 @@ class DecomposableModel:
 
         if nx.classes.function.is_empty(self.directed):
             self.undirected = self.maxtree.copy()
-
 
     def get_score(self, V):
         """ The score function.
@@ -109,7 +108,7 @@ class DecomposableModel:
         weight_list = []
         for edge in edges:
             weight_list.append(self.get_score([edge[0]]) + self.get_score([edge[1]]) - self.get_score(list(edge))
-                              - self.get_score([]))
+                               - self.get_score([]))
         return weight_list
 
     def get_objective(self, dict_of_vars):
@@ -129,7 +128,8 @@ class DecomposableModel:
                                    self.get_score(to_scoreUVS) - self.get_score(to_scoreS)
         return w
 
-    def learn(self, k_max=np.inf, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False):
+    def learn(self, k_max=np.inf, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False, coarsen=False,
+              extra_iters=np.inf):
         """An algorithm which performs the learning of kDGs (or MkDGs) by the coarsening procedure proposed in
         https://opt-ml.org/oldopt/papers/OPT2015_paper_36. The learned graph is placed in the undirected attribute
         :param k_max (int): The maximal clique size of the learned network.
@@ -143,7 +143,13 @@ class DecomposableModel:
         if nx.classes.function.is_empty(self.maxtree):
             self.mst()
 
-        current_model = self.maxtree
+        if coarsen:
+            current_model = self.undirected
+            iter = 1
+        else:
+            current_model = self.maxtree
+            iter = 0
+
         sol = [1]
         current_max_clique = 2
         start = time.time()
@@ -183,12 +189,12 @@ class DecomposableModel:
 
             A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
 
-            if maximal:
+            if maximal or coarsen:
                 m.addConstr(A3[0:r, :] @ x == b3[0:r], name="c3eq")
                 m.addConstr(A3[r:len(b3), :] @ x <= b3[r:len(b3)], name="c3ineq")
+                current_max_clique += 1
             else:
                 m.addConstr(A3 @ x <= b3, name="c3")
-
 
             m.optimize()
             sol = x.X
@@ -198,6 +204,11 @@ class DecomposableModel:
             current_model = nx.Graph(e)
 
             end = time.time()
+
+            if iter == extra_iters:
+                break
+
+            iter += 1
 
         self.undirected = current_model
 
@@ -272,7 +283,7 @@ class DecomposableModel:
         current_model = self.undirected
         cliques = ch.chain_of_cliques(current_model)
         sep_list = ch.get_separators(cliques)
-        comps = ch.get_comp_list(current_model, sep_list)
+        comps = ch.get_nb_comp_list (current_model,sep_list)
         sep_to_comp = dict(zip(sep_list, comps))
         edges = list()
         for S in sep_to_comp:
@@ -344,7 +355,7 @@ class DecomposableModel:
         # build the mst spanning tree
         initial_graph = CliqueTree()
         start = time.time()
-        #Generate MST
+        # Generate MST
         if nx.classes.function.is_empty(self.maxtree):
             self.mst()
 
@@ -376,7 +387,8 @@ class DecomposableModel:
                     # check if the graph is chordal and has the right clique number
                     if DecomposableModel.get_clique_num(cliques) <= k_max:
                         # get the score of the new graph
-                        greedy_bn, greedy_score_delta = DecomposableModel.add_edge_to_bn(edge, current_bn.copy(), self.bdeu)
+                        greedy_bn, greedy_score_delta = DecomposableModel.add_edge_to_bn(edge, current_bn.copy(),
+                                                                                         self.bdeu)
                         # is the score better than previous graphs?
                         if greedy_score_delta > best_score_delta[0]:
                             # If we add can add an edge, the algorithm should continue looking for more edges
@@ -466,5 +478,3 @@ class DecomposableModel:
 
     def get_score_function(self):
         return self.bdeu
-
-

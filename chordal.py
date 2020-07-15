@@ -227,3 +227,40 @@ def different_edges(graph1, graph2):
     percentage = count / len(edgesG1)
 
     return percentage
+
+def get_nb_comp_list (G, S_list):
+    '''
+    Get the connected components of the neighborhoods of each separator
+    '''
+
+    comps= list()
+    for S in S_list:
+        # Get the neighour of S (all the vertices completely connected to S in the graph)
+        nb = get_neighbour(G,S)
+        # Get the subgraph of nb
+        G_nb = nx.Graph(G.subgraph(nb))
+        # Get the connected components of G_nb
+        comps.append(list(nx.algorithms.connected_components(G_nb)))
+
+    return comps
+
+
+
+
+def get_neighbour(graph, seps):
+    neighbours = set()
+    comp_connected = []
+    for vertex in seps:
+        neighbours = neighbours.union(graph.neighbors(vertex))
+
+    for n in neighbours:
+        connected = True
+        for s in seps:
+            if not(graph.has_edge(n, s) or graph.has_edge(s, n)):
+                connected = False
+
+        if connected:
+            comp_connected.append(n)
+
+    return comp_connected
+
