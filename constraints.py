@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
+import chordal as ch
 from itertools import combinations, chain
 
 
@@ -196,6 +197,68 @@ def type3(sep_to_comps, dict_of_vars):
             else:
                 A3eq.append(hold_eq)
                 b3eq.append(len(p) - 1)
+
+    A3 = sp.lil_matrix((len(A3ineq) + len(A3eq), len(dict_of_vars.keys())))
+    b3 = np.zeros((len(b3ineq) + len(b3eq), ))
+    row = 0
+    for item in A3eq:
+        for vals in item:
+            A3[row, vals] = 1
+        b3[row] = b3eq[row]
+        row += 1
+    hold = row
+    for item in A3ineq:
+        for vals in item:
+            A3[row, vals] = 1
+        b3[row] = b3ineq[row - hold]
+        row += 1
+
+    return A3, b3, len(b3eq)
+
+def type3coarsen(sep_to_comps, dict_of_vars, G):
+    """Build the type 3 constraints, which guarantee that the vertices u and v were separated by S
+        before the edge was added.
+         Remark: For the purposes of building the ILP model, the constraint is built as A3 * x <= b3.
+         :param sep_to_comps (dictionary): A dictionary that maps every separator to its connected components.
+         :param dict_of_vars (dictionary): A dictionary which maps each candidate {u,v|S} to an index i in w.
+         :return A3 (sp.lil_matrix): A constraint matrix.
+         :return b3 (np.array): An upper bound vector correspnding to A2u.
+         """
+    dec_vars = dict_of_vars.keys()
+    A3ineq = list()
+    b3ineq = list()
+    A3eq = list()
+    b3eq = list()
+    for s in sep_to_comps.keys():
+        comps = sep_to_comps[s]
+        p_set = list(powerset(comps))
+        for p in p_set:
+            hold_ineq = list()
+            hold_eq = list()
+            add_ineq = False
+            if not (len(p) == len(comps)):
+                add_ineq = True
+                combos = list(combinations(p, 2))
+                for pair in combos:
+                    for u in pair[0]:
+                        for v in pair[1]:
+                            uv = tuple(sorted([u, v]))
+                            if (uv, s) in dec_vars:
+                                hold_ineq.append(dict_of_vars[(uv, s)])
+            else:
+                combos = list(combinations(p, 2))
+                for pair in combos:
+                    for u in pair[0]:
+                        for v in pair[1]:
+                            uv = tuple(sorted([u, v]))
+                            if (uv, s) in dec_vars:
+                                hold_eq.append(dict_of_vars[(uv, s)])
+            if add_ineq:
+                A3ineq.append(hold_ineq)
+                b3ineq.append(len(p) - 1)
+            else:
+                A3eq.append(hold_eq)
+                b3eq.append(len(ch.get_neighbour(G, s)) - 1)
 
     A3 = sp.lil_matrix((len(A3ineq) + len(A3eq), len(dict_of_vars.keys())))
     b3 = np.zeros((len(b3ineq) + len(b3eq), ))

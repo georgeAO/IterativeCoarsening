@@ -9,6 +9,8 @@ import chordal as ch
 test = DecomposableModel("data/autos.csv")
 #learn the model using the kdg approach
 test.learn(k_max=4)
+test.learn(k_max=6, l_max=np.inf, max_time=1000.0, max_time_gurobi=500.0, maximal=False, coarsen=True,
+              extra_iters=2)
 #test.learn(k_max=np.inf, l_max=1, max_time=1000.0, max_time_gurobi=500.0, maximal=False, coarsen=True, extra_iters=2)
 test.coarsen()
 #convert learned (undirected) model to directed with minimal I-map

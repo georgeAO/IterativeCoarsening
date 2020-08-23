@@ -187,13 +187,39 @@ class DecomposableModel:
             m.addConstr(A2u @ x <= b2u, name="c2u")
             m.addConstr(A2v @ x <= b2v, name="c2v")
 
-            A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
+            #A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
 
-            if maximal or coarsen:
+            if maximal:
+                A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
                 m.addConstr(A3[0:r, :] @ x == b3[0:r], name="c3eq")
                 m.addConstr(A3[r:len(b3), :] @ x <= b3[r:len(b3)], name="c3ineq")
                 current_max_clique += 1
+            elif coarsen:
+                sep_list = ch.get_separators(cliques)
+                comps = ch.get_nb_comp_list(current_model, sep_list)
+                sep_to_comps = dict(zip(sep_list, comps))
+                e_to_seps = ch.get_seps_for_cand_edges(comps, sep_list)
+                list_vars = co.generate_dec_variables(e_to_seps, l_max)
+                dict_of_vars = {uvS: ind for ind, uvS in enumerate(list_vars)}
+                c = self.get_objective(dict_of_vars)
+
+                m = gp.Model("iterate" + str(current_max_clique))
+                x = m.addMVar(shape=len(c), vtype=GRB.BINARY, name="x")
+                m.setObjective(c @ x, GRB.MAXIMIZE)
+                m.Params.MIPFocus = 1
+                m.Params.timeLimit = max_time_gurobi
+
+                A1, b1 = co.type1(e_to_seps, dict_of_vars)
+                m.addConstr(A1 @ x <= b1, name="c1")
+
+                A2u, b2u, A2v, b2v = co.type2(e_to_seps, dict_of_vars, edge_list)
+                m.addConstr(A2u @ x <= b2u, name="c2u")
+                m.addConstr(A2v @ x <= b2v, name="c2v")
+                A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
+                m.addConstr(A3[0:r, :] @ x == b3[0:r], name="c3eq")
+                m.addConstr(A3[r:len(b3), :] @ x <= b3[r:len(b3)], name="c3ineq")
             else:
+                A3, b3, r = co.type3(sep_to_comps, dict_of_vars)
                 m.addConstr(A3 @ x <= b3, name="c3")
 
             m.optimize()
