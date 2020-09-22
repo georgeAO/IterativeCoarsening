@@ -1,8 +1,5 @@
 from decomposable_model import DecomposableModel
 
-
-
-
 #build the decomposable model object with relevant data
 test = DecomposableModel("data/autos.csv")
 #learn the model using the kdg approach
